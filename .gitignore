@@ -1,0 +1,12 @@
+# Files
+*.csv
+*.tar
+*.tar.gz
+
+
+# Build folders
+graphBIG/
+hookFunctions/
+obj-intel64/
+pin-3.22-98547-g7a303a835-gcc-linux/
+rodinia/
