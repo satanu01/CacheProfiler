@@ -6,7 +6,7 @@ This repository contains an **Intel PIN–based cache simulator** that models a 
 - **Private L2 cache per thread**
 - **Shared, inclusive Last-Level Cache (LLC)**
 
-The tool periodically logs cache access and miss statistics to a CSV file **for ROI code segment (for that you have to instrument source code earlier)**.
+The tool periodically logs cache access and miss statistics to a CSV file **for ROI code segment (for that you have to instrument source code earlier) or set the `gotROI` to `true`, it will provide you for the whole program**.
 
 ------
 
@@ -108,13 +108,16 @@ All parameters are configurable at runtime:
 ## ▶️ Example Usage
 
 ```bash
+$cd application/
+$make
+$cd ..
 $PIN_ROOT/pin -t obj-intel64/CacheProfiler.so \
     -l1_size 32768 \
     -l2_size 262144 \
     -llc_size 8388608 \
     -period 500000 \
     -output stats.csv \
-    -- ./my_program
+    -- application/bfs application/graph.txt
 ```
 
 ------
@@ -177,9 +180,3 @@ If an assertion fails, it indicates a **bug in cache logic**, not undefined beha
 - This is a **functional cache simulator**, not cycle-accurate
 - Memory latency and coherence protocols are not modeled
 - LLC invalidation scans all threads (acceptable for teaching/research scale)
-
-------
-
-## 📜 License
-
-Use freely for **education and research**.
