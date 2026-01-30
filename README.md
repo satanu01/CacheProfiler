@@ -115,7 +115,7 @@ $PIN_ROOT/pin -t obj-intel64/CacheProfiler.so \
     -l1_size 32768 \
     -l2_size 262144 \
     -llc_size 8388608 \
-    -period 500000 \
+    -period 100000 \
     -output stats.csv \
     -- application/bfs application/graph.txt
 ```
@@ -180,3 +180,4 @@ If an assertion fails, it indicates a **bug in cache logic**, not undefined beha
 - This is a **functional cache simulator**, not cycle-accurate
 - Memory latency and coherence protocols are not modeled
 - LLC invalidation scans all threads (acceptable for teaching/research scale)
+
