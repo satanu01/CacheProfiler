@@ -177,9 +177,3 @@ If an assertion fails, it indicates a **bug in cache logic**, not undefined beha
 - This is a **functional cache simulator**, not cycle-accurate
 - Memory latency and coherence protocols are not modeled
 - LLC invalidation scans all threads (acceptable for teaching/research scale)
-
-------
-
-## 📜 License
-
-Use freely for **education and research**.
