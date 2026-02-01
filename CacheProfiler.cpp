@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <limits>
 #include <cassert>
+#include <utility>
 
 using std::string;
 using std::vector;
@@ -128,6 +129,61 @@ private:
     vector<vector<CacheEntry>> cache;
 };
 
+/* ---------- Page allocation ---------- */
+struct PairHash {
+    size_t operator()(const std::pair<long,long>& p) const {
+        return std::hash<long>()(p.first) ^ (std::hash<long>()(p.second) << 1);
+    }
+};
+
+static std::unordered_map<std::pair<long,long>, long, PairHash> page_translation;
+static vector<long> free_physical_pages;
+static long free_physical_pages_remaining = 0;
+
+static uint64_t memory_footprint = 0;
+static uint64_t physical_page_replacement = 0;
+
+static PIN_LOCK pageLock;
+
+/* ---------- Page allocator ---------- */
+
+long lrand(void) {
+    if(sizeof(int) < sizeof(long)) {
+        return static_cast<long>(rand()) << (sizeof(int) * 8) | rand();
+    }
+    return rand();
+}
+
+// Random allocator.
+long page_allocator(long addr, int coreid) {
+    long vpn = addr >> 12;
+    auto key = std::make_pair(coreid, vpn);
+	if (page_translation.find(key) == page_translation.end()) {
+		memory_footprint += 1 << 12;
+
+		if (!free_physical_pages_remaining) {
+			physical_page_replacement++;
+			long phys = lrand() % free_physical_pages.size();
+			page_translation[key] = phys;
+		} 
+		else {
+			long phys = lrand() % free_physical_pages.size();
+			long start = phys;
+
+			while (free_physical_pages[phys] != -1) {
+				phys = (phys + 1) % free_physical_pages.size();
+				if (phys == start) break;
+			}
+
+			page_translation[key] = phys;
+			free_physical_pages[phys] = coreid;
+			--free_physical_pages_remaining;
+		}
+	}
+
+	return (page_translation[key] << 12) | (addr & ((1 << 12) - 1));
+}
+
 /* ---------- Per-thread state ---------- */
 
 struct ThreadState {
@@ -190,11 +246,15 @@ VOID CountInst(THREADID tid) {
 
 VOID ProcessMem(THREADID tid, ADDRINT addr, UINT32 size) {
     ThreadState &ts = threads[tid];
+	
+	PIN_GetLock(&pageLock, tid + 1);
+    ADDRINT phys = page_allocator(addr, tid);
+    PIN_ReleaseLock(&pageLock);
 
     uint32_t line = std::min(ts.L1.Line(), std::min(ts.L2.Line(), KnobLLCLine.Value()));
 
-    uint64_t start = addr;
-    uint64_t end = addr + (size ? size : 1) - 1;
+    uint64_t start = phys;
+    uint64_t end = phys + (size ? size : 1) - 1;
 
     for (uint64_t a = (start / line) * line; a <= end; a += line) {
 
@@ -291,6 +351,15 @@ int main(int argc, char *argv[]) {
 
     PIN_InitLock(&llcLock);
     PIN_InitLock(&logLock);
+	PIN_InitLock(&pageLock);
+
+    // Physical memory: 1GB
+    const long PHYS_MEM_SIZE = 1L << 30;
+    const long PAGE_BYTES   = 1L << 12;    // 4KB
+    long num_pages = PHYS_MEM_SIZE / PAGE_BYTES;
+
+    free_physical_pages.assign(num_pages, -1);
+    free_physical_pages_remaining = num_pages;
 
     LLC.Init(KnobLLCSize.Value(), KnobLLCAssoc.Value(), KnobLLCLine.Value());
 
