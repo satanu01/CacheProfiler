@@ -1,4 +1,4 @@
-// CacheProfile.cpp
+// CacheProfiler.cpp
 // PIN tool: private lock-free L1/L2 per thread, locked inclusive shared LLC
 
 #include "pin.H"
@@ -32,6 +32,8 @@ KNOB<UINT32> KnobLLCLine(KNOB_MODE_WRITEONCE, "pintool", "llc_line", "64", "LLC 
 
 KNOB<UINT64> KnobPeriod(KNOB_MODE_WRITEONCE, "pintool", "period", "1000000", "instruction period");
 KNOB<string> KnobOutput(KNOB_MODE_WRITEONCE, "pintool", "output", "data.csv", "CSV output");
+
+KNOB<string> KnobPageRepl(KNOB_MODE_WRITEONCE, "pintool", "page_repl", "none", "page replacement policy (none[default], random)");
 
 static const uint64_t NO_EVICT = std::numeric_limits<uint64_t>::max();
 
@@ -154,34 +156,38 @@ long lrand(void) {
     return rand();
 }
 
-// Random allocator.
 long page_allocator(long addr, int coreid) {
-    long vpn = addr >> 12;
-    auto key = std::make_pair(coreid, vpn);
-	if (page_translation.find(key) == page_translation.end()) {
-		memory_footprint += 1 << 12;
+    if (std::strcmp(KnobPageRepl.Value().c_str(), "random") == 0) {   // random allocator.
+        long vpn = addr >> 12;
+        auto key = std::make_pair(coreid, vpn);
+        if (page_translation.find(key) == page_translation.end()) {
+            memory_footprint += 1 << 12;
 
-		if (!free_physical_pages_remaining) {
-			physical_page_replacement++;
-			long phys = lrand() % free_physical_pages.size();
-			page_translation[key] = phys;
-		} 
-		else {
-			long phys = lrand() % free_physical_pages.size();
-			long start = phys;
+            if (!free_physical_pages_remaining) {
+                physical_page_replacement++;
+                long phys = lrand() % free_physical_pages.size();
+                page_translation[key] = phys;
+            } 
+            else {
+                long phys = lrand() % free_physical_pages.size();
+                long start = phys;
 
-			while (free_physical_pages[phys] != -1) {
-				phys = (phys + 1) % free_physical_pages.size();
-				if (phys == start) break;
-			}
+                while (free_physical_pages[phys] != -1) {
+                    phys = (phys + 1) % free_physical_pages.size();
+                    if (phys == start) break;
+                }
 
-			page_translation[key] = phys;
-			free_physical_pages[phys] = coreid;
-			--free_physical_pages_remaining;
-		}
-	}
+                page_translation[key] = phys;
+                free_physical_pages[phys] = coreid;
+                --free_physical_pages_remaining;
+            }
+        }
 
-	return (page_translation[key] << 12) | (addr & ((1 << 12) - 1));
+        return (page_translation[key] << 12) | (addr & ((1 << 12) - 1));
+    }
+    else {  // none translation and allocator
+        return addr;
+    }
 }
 
 /* ---------- Per-thread state ---------- */
@@ -353,11 +359,9 @@ int main(int argc, char *argv[]) {
     PIN_InitLock(&logLock);
 	PIN_InitLock(&pageLock);
 
-    // Physical memory: 1GB
-    const long PHYS_MEM_SIZE = 1L << 30;
+    const long PHYS_MEM_SIZE = 1L << 32;    // Physical memory: 4GB
     const long PAGE_BYTES   = 1L << 12;    // 4KB
     long num_pages = PHYS_MEM_SIZE / PAGE_BYTES;
-
     free_physical_pages.assign(num_pages, -1);
     free_physical_pages_remaining = num_pages;
 

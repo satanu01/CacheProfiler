@@ -108,14 +108,15 @@ All parameters are configurable at runtime:
 ## ▶️ Example Usage
 
 ```bash
-$cd application/
-$make
-$cd ..
-$PIN_ROOT/pin -t obj-intel64/CacheProfiler.so \
+$ cd application/
+$ make
+$ cd ..
+$ $PIN_ROOT/pin -t obj-intel64/CacheProfiler.so \
     -l1_size 32768 \
     -l2_size 262144 \
     -llc_size 8388608 \
     -period 100000 \
+    -page_repl random \
     -output stats.csv \
     -- application/bfs application/graph.txt
 ```
