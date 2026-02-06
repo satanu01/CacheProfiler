@@ -98,10 +98,11 @@ All parameters are configurable at runtime:
 
 ##### Logging
 
-| Argument  | Description                | Default    |
-| --------- | -------------------------- | ---------- |
-| `-period` | Instructions per log entry | `1000000`  |
-| `-output` | CSV output file            | `data.csv` |
+| Argument     | Description                | Default    |
+| ------------ | -------------------------- | ---------- |
+| `-period`    | Instructions per log entry | `1000000`  |
+| `-output`    | CSV output file            | `data.csv` |
+| `-page_repl` | Page replacement policy    |   `none`   |
 
 ------
 
