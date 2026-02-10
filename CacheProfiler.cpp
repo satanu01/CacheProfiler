@@ -52,7 +52,7 @@ public:
         sets = size / (assoc * line_size);
         if (sets == 0) sets = 1;
         cache.assign(sets, vector<CacheEntry>());
-        access = miss = ts = 0;
+        access = miss = evict = ts = 0;
     }
 
     bool Probe(uint64_t addr) {
@@ -93,6 +93,7 @@ public:
 
         uint64_t evicted_line = (s[lru].tag * sets + set) * line_size;
         s[lru] = {tag, ts};
+        evict++;
         return evicted_line;
     }
 
@@ -123,11 +124,12 @@ public:
     uint64_t Access() const { return access; }
     uint64_t Miss() const { return miss; }
     uint32_t Line() const { return line_size; }
+    uint64_t Evict() const { return evict; }
 
 private:
     uint32_t assoc = 0, line_size = 64;
     uint64_t sets = 1;
-    uint64_t access = 0, miss = 0, ts = 0;
+    uint64_t access = 0, miss = 0, ts = 0, evict = 0;
     vector<vector<CacheEntry>> cache;
 };
 
@@ -198,6 +200,7 @@ struct ThreadState {
     UINT64 lastL1A = 0, lastL1M = 0;
     UINT64 lastL2A = 0, lastL2M = 0;
     UINT64 lastLLCA = 0, lastLLCM = 0;
+    UINT64 lastLLCEv = 0;
 };
 
 /* ---------- Global state ---------- */
@@ -228,12 +231,14 @@ VOID LogIfNeeded(THREADID tid) {
     logFile << tid << "," << ts.inst << "," 
             << ts.L1.Access() - ts.lastL1A << "," << ts.L1.Miss() - ts.lastL1M << "," << ((ts.L1.Miss() - ts.lastL1M)/((ts.L1.Access() - ts.lastL1A)*1.0))*100.0 << ","
             << ts.L2.Access() - ts.lastL2A << "," << ts.L2.Miss() - ts.lastL2M << "," << ((ts.L2.Miss() - ts.lastL2M)/((ts.L2.Access() - ts.lastL2A)*1.0))*100.0 << ","
-            << LLC.Access() - ts.lastLLCA << "," << LLC.Miss() - ts.lastLLCM << "," << ((LLC.Miss() - ts.lastLLCM)/((LLC.Access() - ts.lastLLCA)*1.0))*100.0 << "\n";
+            << LLC.Access() - ts.lastLLCA << "," << LLC.Miss() - ts.lastLLCM << "," << ((LLC.Miss() - ts.lastLLCM)/((LLC.Access() - ts.lastLLCA)*1.0))*100.0 << ","
+            << LLC.Evict() - ts.lastLLCEv << "\n";
 
     ts.lastInst = ts.inst;
     ts.lastL1A = ts.L1.Access(); ts.lastL1M = ts.L1.Miss();
     ts.lastL2A = ts.L2.Access(); ts.lastL2M = ts.L2.Miss();
     ts.lastLLCA = LLC.Access();  ts.lastLLCM = LLC.Miss();
+    ts.lastLLCEv = LLC.Evict();
 
     PIN_ReleaseLock(&logLock);
 }
@@ -369,7 +374,7 @@ int main(int argc, char *argv[]) {
 
     logFile.open(KnobOutput.Value().c_str());
     logFile << std::setfill(' ');
-    logFile << "Thread_ID,Inst_Count,L1_Access,L1_Misses,L1 MR,L2_Access,L2_Misses,L2_MR,LLC_Access,LLC_Misses,LLC_MR\n";
+    logFile << "Thread_ID,Inst_Count,L1_Access,L1_Misses,L1 MR,L2_Access,L2_Misses,L2_MR,LLC_Access,LLC_Misses,LLC_MR,LLC_Evict\n";
 
     PIN_AddThreadStartFunction(ThreadStart, nullptr);
     INS_AddInstrumentFunction(Instruction, nullptr);
